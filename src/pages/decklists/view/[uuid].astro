@@ -1,0 +1,204 @@
+---
+import Base from "../../../layouts/Base.astro";
+import {
+  getDecklists,
+  getDecklistByUuid,
+  groupCardsByType,
+  getCostBuckets,
+  getGuildStandingBreakdown,
+} from "../../../lib/decklists";
+import { getCardByCode, getPackByCode, FACTION_TEXT_CLASS, splitIdentityTitle } from "../../../lib/catalog";
+
+export function getStaticPaths() {
+  return getDecklists().map((decklist) => ({ params: { uuid: decklist.uuid } }));
+}
+
+const { uuid } = Astro.params;
+const decklist = getDecklistByUuid(uuid!)!;
+const { identity, groups } = groupCardsByType(decklist);
+const identityTitle = splitIdentityTitle(identity.title);
+
+const nonIdentityEntries = decklist.cards.filter((entry) => entry.code !== decklist.identity_code);
+const cardCount = nonIdentityEntries.reduce((sum, entry) => sum + entry.quantity, 0);
+const packsRequired = [...new Set(decklist.cards.map((entry) => getCardByCode(entry.code)?.pack_code).filter((c): c is string => !!c))]
+  .map((code) => getPackByCode(code))
+  .filter((pack): pack is NonNullable<typeof pack> => !!pack)
+  .sort((a, b) => a.date_release.localeCompare(b.date_release));
+
+const costBuckets = getCostBuckets(decklist);
+const maxCostTotal = Math.max(1, ...costBuckets.map((b) => b.total));
+const guildSegments = getGuildStandingBreakdown(decklist);
+const maxGuildTotal = Math.max(1, ...guildSegments.map((s) => s.tiers[0] + s.tiers[1] + s.tiers[2]));
+---
+
+<Base title={decklist.name}>
+  <h1 class="text-2xl font-bold flex items-center gap-2">
+    <svg class={`icon-wb icon-${identity.faction_code}`} aria-hidden="true">
+      <use xlink:href={`#icon-${identity.faction_code}`} />
+    </svg>
+    <span class="icon-fallback">{identity.faction_code}</span>
+    {decklist.name}
+  </h1>
+  <p class="text-sm text-base-content/60 mt-1">{decklist.date_creation.split(" ")[0]}</p>
+
+  <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+    <div class="space-y-8">
+      <div class="flex gap-4">
+        <a href={`/cards/${identity.code}/`}>
+          <img
+            src={`/card_images/large/${identity.code}_front.jpg`}
+            alt={identity.title}
+            class="w-28 rounded border border-neutral-200"
+          />
+        </a>
+        <div>
+          <a href={`/cards/${identity.code}/`} class="font-semibold link link-hover">
+            {identityTitle.name}
+            {identityTitle.subtitle && <> <small>{identityTitle.subtitle}</small></>}
+          </a>
+          <dl class="mt-2 text-sm text-base-content/70 space-y-1">
+            <div>
+              <dt class="inline font-medium text-neutral-700">Cards:</dt> <dd class="inline">{cardCount}</dd>
+            </div>
+            <div>
+              <dt class="inline font-medium text-neutral-700">
+                {packsRequired.length === 1 ? "Pack" : "Packs"} required:
+              </dt>{" "}
+              <dd class="inline">
+                {packsRequired.map((pack, i) => (
+                  <>
+                    {i > 0 && ", "}
+                    <a href={`/sets/${pack.code}/`} class="link link-hover">
+                      {pack.name}
+                    </a>
+                  </>
+                ))}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <div>
+        <h2 class="font-semibold text-lg mb-2">Deck</h2>
+        <div class="space-y-6">
+          {
+            [...groups.entries()].map(([typeName, entries]) => (
+              <div>
+                <h2 class="font-semibold mb-2">
+                  {typeName} ({entries.length})
+                </h2>
+                <ul class="divide-y divide-neutral-100">
+                  {entries.toSorted((a, b) => (a.card.title > b.card.title) ? 1 : ((b.card.title > a.card.title) ? -1 : 0)).map(({ card, quantity }) => {
+                    const factionClass = FACTION_TEXT_CLASS[card.faction_code] ?? "";
+                    const standingIcons = card.standing
+                      ? Object.entries(card.standing).flatMap(([factionCode, count]) =>
+                          Array.from({ length: count }, () => factionCode),
+                        )
+                      : [];
+                    return (
+                      <li class="py-1.5 flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-1 flex-wrap">
+                          {quantity > 1 && `${quantity}x `}
+                          <a href={`/cards/${card.code}/`} class="link link-hover">
+                            {card.title}
+                          </a>
+                          {standingIcons.map((factionCode) => (
+                            <>
+                              <svg class={`icon-wb icon-${factionCode}`} aria-hidden="true">
+                                <use xlink:href={`#icon-${factionCode}`} />
+                              </svg>
+                              <span class="icon-fallback">{factionCode}</span>
+                            </>
+                          ))}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div>
+        <h2 class="font-semibold text-lg mb-2">Card Cost</h2>
+        <div class="flex gap-2 h-40">
+          {
+            costBuckets.map((bucket) => (
+              <div class="flex-1 min-w-0 flex flex-col items-center justify-end gap-1">
+                <span class="text-xs text-base-content/60">{bucket.total > 0 ? bucket.total : ""}</span>
+                <div
+                  class="w-full flex flex-col-reverse rounded-t overflow-hidden bg-base-200"
+                  style={`height:${(bucket.total / maxCostTotal) * 100}%`}
+                >
+                  {bucket.segments.map(
+                    (seg) =>
+                      seg.count > 0 && (
+                        <div
+                          style={`height:${(seg.count / bucket.total) * 100}%; background-color:${seg.color}`}
+                          title={`${seg.label}: ${seg.count}`}
+                        />
+                      ),
+                  )}
+                </div>
+                <span class="text-xs text-base-content/60">{bucket.cost}</span>
+              </div>
+            ))
+          }
+        </div>
+        <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/60">
+          {
+            costBuckets[0]?.segments.map((seg) => (
+              <li class="flex items-center gap-1.5">
+                <span class="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={`background-color:${seg.color}`} />
+                {seg.label}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div>
+        <h2 class="font-semibold text-lg mb-2">Card Count by Guild</h2>
+        <div class="flex gap-2 h-40">
+          {
+            guildSegments.map((seg) => {
+              const total = seg.tiers[0] + seg.tiers[1] + seg.tiers[2];
+              return (
+                <div class="flex-1 min-w-0 flex flex-col items-center justify-end gap-1">
+                  <span class="text-xs text-base-content/60">{total > 0 ? total : ""}</span>
+                  <div
+                    class="w-full flex flex-col-reverse rounded-t overflow-hidden bg-base-200"
+                    style={`height:${(total / maxGuildTotal) * 100}%`}
+                  >
+                    {seg.tiers.map(
+                      (count, i) =>
+                        count > 0 && (
+                          <div
+                            style={`height:${(count / total) * 100}%; background-color:${seg.tierColors[i]}`}
+                            title={`${seg.label}, standing ${i + 1}: ${count}`}
+                          />
+                        ),
+                    )}
+                  </div>
+                  <span class="text-[10px] text-base-content/60 text-center leading-tight">{seg.label}</span>
+                </div>
+              );
+            })
+          }
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="font-semibold text-lg mb-2">By {decklist.author}</h2>
+      {
+        decklist.description && (
+          <div class="prose-sm" set:html={decklist.description} />
+        )
+      }
+    </div>
+  </div>
+</Base>

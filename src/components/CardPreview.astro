@@ -1,0 +1,118 @@
+<div
+  id="card-tooltip"
+  class="hidden fixed z-50 w-80 rounded-box bg-base-100 border border-base-300 shadow-lg p-3 pointer-events-none"
+  role="tooltip"
+></div>
+
+<dialog id="card-modal" class="modal">
+  <div class="modal-box max-w-2xl">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close">✕</button>
+    </form>
+    <div id="card-modal-content" class="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-4"></div>
+    <div class="modal-action">
+      <a id="card-modal-link" href="#" class="btn btn-sm no-popup">View full card page</a>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<script>
+  const tooltip = document.getElementById("card-tooltip") as HTMLDivElement;
+  const modal = document.getElementById("card-modal") as HTMLDialogElement;
+  const modalContent = document.getElementById("card-modal-content") as HTMLDivElement;
+  const modalLink = document.getElementById("card-modal-link") as HTMLAnchorElement;
+
+  async function fetchFragment(url: string): Promise<string | null> {
+    try {
+      const res = await fetch(url);
+      return res.ok ? await res.text() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  let hoverEnabled = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  let tooltipCode: string | null = null;
+
+  function cardCodeFromLink(el: Element, kind: "tooltip" | "modal"): string | null {
+    if (!(el instanceof HTMLAnchorElement)) return null;
+    if (el.classList.contains("no-popup")) return null;
+    if (kind === "tooltip" && el.classList.contains("no-tooltip")) return null;
+    if (kind === "modal" && el.classList.contains("no-modal")) return null;
+    const match = new URL(el.href).pathname.match(/^\/cards\/([^/]+)\/$/);
+    return match ? match[1] : null;
+  }
+
+  function hideTooltip() {
+    tooltip.classList.add("hidden");
+    tooltipCode = null;
+  }
+
+  function positionTooltip(link: HTMLAnchorElement) {
+    const rect = link.getBoundingClientRect();
+    const tipRect = tooltip.getBoundingClientRect();
+    let left = rect.right + 8;
+    if (left + tipRect.width > window.innerWidth - 8) left = rect.left - tipRect.width - 8;
+    left = Math.max(8, left);
+    let top = rect.top + rect.height / 2 - tipRect.height / 2;
+    top = Math.min(Math.max(top, 8), window.innerHeight - tipRect.height - 8);
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
+  async function showTooltip(link: HTMLAnchorElement, code: string) {
+    const html = await fetchFragment(`/card-preview/tooltip/${code}.html`);
+    if (!html || !hoverEnabled || tooltipCode !== code) return; // stale: hovered elsewhere while fetching, or touch disabled it
+    tooltip.innerHTML = html;
+    tooltip.classList.remove("hidden");
+    positionTooltip(link);
+  }
+
+  document.addEventListener(
+    "touchstart",
+    () => {
+      hoverEnabled = false;
+      hideTooltip();
+    },
+    { once: true, passive: true },
+  );
+
+  document.body.addEventListener("mouseover", (event) => {
+    if (!hoverEnabled || !(event.target instanceof Element)) return;
+    const link = event.target.closest("a");
+    if (!link) return;
+    const code = cardCodeFromLink(link, "tooltip");
+    if (!code || code === tooltipCode) return;
+    tooltipCode = code;
+    showTooltip(link, code);
+  });
+
+  document.body.addEventListener("mouseout", (event) => {
+    if (!(event.target instanceof Element)) return;
+    const link = event.target.closest("a");
+    if (link && cardCodeFromLink(link, "tooltip")) hideTooltip();
+  });
+
+  window.addEventListener("scroll", hideTooltip, { passive: true, capture: true });
+  window.addEventListener("resize", hideTooltip);
+
+  document.body.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+    const link = event.target.closest("a");
+    if (!link) return;
+    const code = cardCodeFromLink(link, "modal");
+    if (!code) return;
+    event.preventDefault();
+    hideTooltip();
+    fetchFragment(`/card-preview/modal/${code}.html`).then((html) => {
+      if (!html) return;
+      modalContent.innerHTML = html;
+      modalLink.href = link.href;
+      modal.showModal();
+    });
+  });
+</script>

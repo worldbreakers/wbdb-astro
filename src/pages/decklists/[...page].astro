@@ -1,0 +1,74 @@
+---
+import type { GetStaticPathsOptions } from "astro";
+import Base from "../../layouts/Base.astro";
+import { getDecklists, getGuildDistribution } from "../../lib/decklists";
+import { getCardByCode, FACTION_TEXT_CLASS } from "../../lib/catalog";
+
+export function getStaticPaths({ paginate }: GetStaticPathsOptions) {
+  const sorted = [...getDecklists()].sort((a, b) => b.date_creation.localeCompare(a.date_creation));
+  return paginate(sorted, { pageSize: 50 });
+}
+
+const { page } = Astro.props;
+---
+
+<Base title="Decklists">
+  <h1 class="text-2xl font-bold mb-6">Decklists</h1>
+  <ul class="list divide-y divide-base-300">
+    {
+      page.data.map((decklist) => {
+        const identity = getCardByCode(decklist.identity_code);
+        const distribution = getGuildDistribution(decklist);
+        return (
+          <li class="list-row">
+            {identity && (
+              <a href={`/cards/${identity.code}/`} class="shrink-0 no-popup">
+                <img
+                  src={`/card_images/tiny/${identity.code}_front.jpg`}
+                  alt={identity.title}
+                  class="w-[51px] h-[71px] rounded border border-neutral-200"
+                />
+              </a>
+            )}
+            <div class="list-col-grow min-w-0">
+              <a href={`/decklists/view/${decklist.uuid}/`} class="link link-hover font-semibold">
+                {decklist.name}
+              </a>
+              <p class="text-sm text-base-content/60 mt-1">
+                {identity && (
+                  <span class={FACTION_TEXT_CLASS[identity.faction_code] ?? ""}>{identity.title}</span>
+                )}
+                {" "}· by {decklist.author} · {decklist.date_creation.split(" ")[0]}
+              </p>
+              {distribution.length > 0 && (
+                <div class="mt-2 flex h-2 w-full max-w-xs overflow-hidden rounded-full bg-base-200">
+                  {distribution.map((seg) => (
+                    <span
+                      title={`${seg.label} · ${(seg.relative * 100).toFixed(1)}%`}
+                      style={`width:${(seg.relative * 100).toFixed(2)}%; background-color:#${seg.color}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </li>
+        );
+      })
+    }
+  </ul>
+  <div class="mt-6 flex justify-center">
+    <div class="join">
+      {page.url.prev ? (
+        <a href={page.url.prev} class="join-item btn">« Prev</a>
+      ) : (
+        <span class="join-item btn btn-disabled">« Prev</span>
+      )}
+      <span class="join-item btn btn-disabled">Page {page.currentPage} of {page.lastPage}</span>
+      {page.url.next ? (
+        <a href={page.url.next} class="join-item btn">Next »</a>
+      ) : (
+        <span class="join-item btn btn-disabled">Next »</span>
+      )}
+    </div>
+  </div>
+</Base>

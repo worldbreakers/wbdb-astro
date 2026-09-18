@@ -1,0 +1,174 @@
+---
+import Base from "../../layouts/Base.astro";
+import {
+  getAllCards,
+  getCardsByPack,
+  getCardByCode,
+  getTypeByCode,
+  getFactionByCode,
+  getPackByCode,
+  FACTION_TEXT_CLASS,
+  formatCardText,
+  formatCardFlavor,
+  splitIdentityTitle,
+} from "../../lib/catalog";
+
+export function getStaticPaths() {
+  return getAllCards().map((card) => ({ params: { code: card.code } }));
+}
+
+const { code } = Astro.params;
+const card = getCardByCode(code!)!;
+const type = getTypeByCode(card.type_code);
+const faction = getFactionByCode(card.faction_code);
+const isIdentity = card.type_code === "identity";
+const identityTitle = isIdentity ? splitIdentityTitle(card.title) : null;
+const factionClass = FACTION_TEXT_CLASS[card.faction_code] ?? "";
+const showPrintedTitle = card.printed_title && card.printed_title !== card.title;
+const signatureCards =
+  isIdentity && card.signature
+    ? getAllCards()
+        .filter((c) => c.signature === card.signature && c.type_code !== "identity")
+        .sort((a, b) => a.position - b.position)
+    : [];
+const packCards = getCardsByPack(card.pack_code).slice().sort((a, b) => a.position - b.position);
+const cardIndex = packCards.findIndex((c) => c.code === card.code);
+const prevCard = cardIndex > 0 ? packCards[cardIndex - 1] : undefined;
+const nextCard = cardIndex >= 0 && cardIndex < packCards.length - 1 ? packCards[cardIndex + 1] : undefined;
+const pack = getPackByCode(card.pack_code);
+const standingReqIcons = card.standing
+  ? Object.entries(card.standing).flatMap(([factionCode, count]) =>
+      Array.from({ length: count }, () => factionCode),
+    )
+  : [];
+const isSignatureCard = !isIdentity && typeof card.signature === "string" && card.signature.length > 0;
+const signatureIdentity = isSignatureCard
+  ? getAllCards().find((c) => c.type_code === "identity" && c.signature === card.signature)
+  : undefined;
+const stages = (card.stages ?? []).filter((stage): stage is string => !!stage).map((stage) => formatCardText(stage));
+const hasStats =
+  card.cost !== undefined || card.strength !== undefined || card.health !== undefined || card.standing_req !== undefined;
+---
+
+<Base title={card.title}>
+  <nav class="flex items-center justify-between gap-4 mb-6 text-sm border-b border-base-300 pb-4">
+    <span>
+      {prevCard && (
+        <a href={`/cards/${prevCard.code}/`} class="btn btn-ghost btn-sm no-modal">
+          ← {prevCard.title}
+        </a>
+      )}
+    </span>
+    <a href={`/sets/${card.pack_code}/`} class="font-medium link link-hover">
+      {pack?.name}
+    </a>
+    <span>
+      {nextCard && (
+        <a href={`/cards/${nextCard.code}/`} class="btn btn-ghost btn-sm no-modal">
+          {nextCard.title} →
+        </a>
+      )}
+    </span>
+  </nav>
+  <div class="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-8">
+    <div class="flex flex-col gap-4">
+      <img
+        src={`/card_images/large/${code}${isIdentity ? "_front" : ""}.jpg`}
+        alt={card.title}
+        class="w-full rounded-lg border border-neutral-200"
+      />
+      {
+        isIdentity && (
+          <img
+            src={`/card_images/large/${code}_back.jpg`}
+            alt={`${card.title} (back)`}
+            class="w-full rounded-lg border border-neutral-200"
+          />
+        )
+      }
+    </div>
+    <div>
+      <h1 class="text-2xl font-bold">
+        {identityTitle ? (
+          <>
+            {identityTitle.name}
+            {identityTitle.subtitle && <> <small>{identityTitle.subtitle}</small></>}
+          </>
+        ) : (
+          card.title
+        )}
+      </h1>
+      {showPrintedTitle && <p class="text-neutral-500 italic">{card.printed_title}</p>}
+      <p class="mt-2">
+        <span class={factionClass}>{faction?.name}</span>
+        {" · "}
+        {type?.name}
+        {isSignatureCard && (
+          <span class="badge badge-outline ml-2">
+            Signature Card{signatureIdentity && <> of {signatureIdentity.title}</>}
+          </span>
+        )}
+      </p>
+      {hasStats && (
+        <div class="flex flex-wrap gap-4 mt-4">
+          {(card.cost !== undefined || card.standing_req !== undefined) && (
+            <div class="stats stats-vertical sm:stats-horizontal bg-base-200">
+              {card.cost !== undefined && (
+                <div class="stat"><div class="stat-title">Cost</div><div class="stat-value">{card.cost ?? "X"}</div></div>
+              )}
+              {card.standing_req !== undefined && (
+                <div class="stat">
+                  <div class="stat-title">Standing requirement</div>
+                  <div class="stat-value flex items-center gap-1">
+                    {standingReqIcons.map((factionCode) => (
+                      <>
+                        <svg class={`icon-wb icon-${factionCode}`} aria-hidden="true">
+                          <use xlink:href={`#icon-${factionCode}`} />
+                        </svg>
+                        <span class="icon-fallback">{factionCode}</span>
+                      </>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {(card.strength !== undefined || card.health !== undefined) && (
+            <div class="stats stats-vertical sm:stats-horizontal bg-base-200">
+              {card.strength !== undefined && (
+                <div class="stat"><div class="stat-title">Strength</div><div class="stat-value">{card.strength}</div></div>
+              )}
+              {card.health !== undefined && (
+                <div class="stat"><div class="stat-title">Health</div><div class="stat-value">{card.health}</div></div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {card.text && <div class="mt-4 prose-sm" set:html={formatCardText(card.text)} />}
+      {stages.length > 0 && (
+        <ol class="mt-4 list-inside space-y-1 [list-style-type:upper-roman]">
+          {stages.map((stage) => <li set:html={stage} />)}
+        </ol>
+      )}
+      {card.flavor && <p class="mt-4 italic text-base-content/60" set:html={formatCardFlavor(card.flavor)} />}
+      {card.illustrator && (
+        <p class="mt-4 text-sm text-base-content/60">Illustrated by {card.illustrator}</p>
+      )}
+      {signatureCards.length > 0 && (
+        <div class="mt-4">
+          <h2 class="font-semibold text-sm text-base-content/60">Signature Cards</h2>
+          <ul class="menu menu-sm bg-base-200 rounded-box mt-1 w-fit p-0">
+            {signatureCards.map((sigCard) => (
+              <li>
+                <a href={`/cards/${sigCard.code}/`}>
+                  {sigCard.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  </div>
+</Base>

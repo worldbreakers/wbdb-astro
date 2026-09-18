@@ -1,0 +1,24 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getFactions, FACTION_TEXT_CLASS } from "../../lib/catalog";
+
+const factions = getFactions();
+---
+
+<Base title="Guilds">
+  <h1 class="text-2xl font-bold mb-6">Guilds</h1>
+  <ul class="list divide-y divide-base-300">
+    {
+      factions.map((faction) => (
+        <li class="list-row">
+          <a
+            href={`/factions/${faction.code}/`}
+            class={`link link-hover font-semibold ${FACTION_TEXT_CLASS[faction.code] ?? ""}`}
+          >
+            {faction.name}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</Base>

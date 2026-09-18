@@ -1,0 +1,50 @@
+---
+import IconSprite from "../components/IconSprite.astro";
+import CardPreview from "../components/CardPreview.astro";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · WorldbreakersDB</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#ffffff" />
+  </head>
+  <body class="min-h-screen flex flex-col bg-base-100 text-base-content">
+    <IconSprite />
+    <CardPreview />
+    <header class="bg-neutral text-neutral-content">
+      <nav class="navbar max-w-5xl mx-auto flex-wrap gap-x-6 gap-y-2 px-4 py-4">
+        <a href="/" class="flex items-center gap-2 font-bold text-lg text-neutral-content hover:opacity-80">
+          <img src="/tug.svg" alt="" class="h-8 w-8" />
+          WorldbreakersDB
+        </a>
+        <ul class="menu menu-horizontal menu-lg flex-wrap gap-x-1 px-0">
+          <li><a href="/sets/" class="text-neutral-content">Sets</a></li>
+          <li><a href="/factions/" class="text-neutral-content">Guilds</a></li>
+          <li><a href="/decklists/" class="text-neutral-content">Decklists</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main class="flex-1 max-w-5xl mx-auto w-full px-4 py-8">
+      <slot />
+    </main>
+    <footer class="border-t border-base-300 mt-auto">
+      <div class="max-w-5xl mx-auto px-4 py-6 text-sm text-base-content/60">
+        The information presented on this site about Worldbreakers, both literal and graphical, is copyrighted by
+        <a href="https://worldbreakersgame.com" rel="noreferrer noopener"> panda </a>
+      </div>
+    </footer>
+  </body>
+</html>

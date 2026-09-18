@@ -1,0 +1,61 @@
+---
+import Base from "../layouts/Base.astro";
+import { getDecklists, getGuildDistribution } from "../lib/decklists";
+import { getCardByCode, FACTION_TEXT_CLASS } from "../lib/catalog";
+import logoSvg from "../assets/worldbreakersdb-logo.svg?raw";
+
+const featuredDecklists = getDecklists()
+  .filter((decklist) => decklist.author === "WorldbreakersAK" && decklist.name.includes("Preconstructed Deck"))
+  .sort((a, b) => a.name.localeCompare(b.name));
+---
+
+<Base title="Home">
+  <div class="w-full text-center">
+    <div class="hidden sm:block text-base-content" set:html={logoSvg} />
+    <h1 class="text-3xl font-bold mb-4 sm:hidden">WorldbreakersDB</h1>
+    <p class="mt-4 mb-8 text-base-content/80">
+      A read-only mirror of the Worldbreakers card catalog and public decklists:
+      browse every set and card, look up cards by guild, and read published
+      decklists submitted by the community.
+    </p>
+  </div>
+  <h2 class="text-xl font-bold mb-4">Featured decklists</h2>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    {
+      featuredDecklists.map((decklist) => {
+        const identity = getCardByCode(decklist.identity_code);
+        const distribution = getGuildDistribution(decklist);
+        return (
+          <a
+            href={`/decklists/view/${decklist.uuid}/`}
+            class="card bg-base-100 border border-base-300 hover:shadow-md transition-shadow"
+          >
+            {identity && (
+              <figure>
+                <img
+                  src={`/card_images/large/${identity.code}_front.jpg`}
+                  alt={identity.title}
+                  loading="lazy"
+                  class="w-full"
+                />
+              </figure>
+            )}
+            <div class="card-body p-4">
+              <p class="font-semibold">{decklist.name}</p>
+              {distribution.length > 0 && (
+                <div class="flex h-2 w-full overflow-hidden rounded-full bg-base-200">
+                  {distribution.map((seg) => (
+                    <span
+                      title={`${seg.label} · ${(seg.relative * 100).toFixed(1)}%`}
+                      style={`width:${(seg.relative * 100).toFixed(2)}%; background-color:#${seg.color}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </a>
+        );
+      })
+    }
+  </div>
+</Base>

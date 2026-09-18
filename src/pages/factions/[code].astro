@@ -1,0 +1,113 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getFactions, getFactionByCode, getAllCards, FACTION_TEXT_CLASS, type Card } from "../../lib/catalog";
+import { getDecklists, getGuildDistribution } from "../../lib/decklists";
+
+export function getStaticPaths() {
+  return getFactions().map((faction) => ({ params: { code: faction.code } }));
+}
+
+const { code } = Astro.params;
+const faction = getFactionByCode(code!)!;
+const factionClass = FACTION_TEXT_CLASS[code!] ?? "";
+
+// Group this guild's identity cards by title, deduped to the latest printing
+// (highest zero-padded code), mirroring Laravel's
+// CardsData::select_only_latest_cards. codesByTitle keeps every printing's
+// code per title, since a decklist's identity_code may point at an older
+// printing.
+const identityCards = getAllCards().filter((c) => c.faction_code === code && c.type_code === "identity");
+
+const codesByTitle = new Map<string, string[]>();
+const latestByTitle = new Map<string, Card>();
+for (const card of identityCards) {
+  if (!codesByTitle.has(card.title)) codesByTitle.set(card.title, []);
+  codesByTitle.get(card.title)!.push(card.code);
+
+  const current = latestByTitle.get(card.title);
+  if (!current || card.code > current.code) {
+    latestByTitle.set(card.title, card);
+  }
+}
+
+// getDecklists() is NOT pre-sorted (verified: raw JSON order is oldest-first
+// within an identity), so sort explicitly by date_creation DESC — the
+// recency-based stand-in for Laravel's vote-weighted "points" ranking —
+// before capping to 3.
+const allDecklists = getDecklists();
+const identityGroups = [...latestByTitle.values()]
+  .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }))
+  .map((identity) => {
+    const codes = codesByTitle.get(identity.title)!;
+    return {
+      identity,
+      decklists: allDecklists
+        .filter((d) => codes.includes(d.identity_code))
+        .sort((a, b) => b.date_creation.localeCompare(a.date_creation))
+        .slice(0, 3),
+    };
+  });
+---
+
+<Base title={faction.name}>
+  <h1 class={`text-2xl font-bold mb-6 flex items-center gap-2 ${factionClass}`}>
+    <svg class={`icon-wb icon-${code}`} aria-hidden="true">
+      <use xlink:href={`#icon-${code}`} />
+    </svg>
+    <span class="icon-fallback">{code}</span>
+    {faction.name}
+  </h1>
+  {
+    identityGroups.map(({ identity, decklists }) => (
+      <div class="mb-8">
+        <h2 class="text-xl font-bold mb-2">{identity.title}</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4">
+          <a href={`/cards/${identity.code}/`} class="no-popup">
+            <img
+              src={`/card_images/large/${identity.code}_front.jpg`}
+              alt={identity.title}
+              class="w-full rounded-lg border border-neutral-200"
+            />
+          </a>
+          <div>
+            {decklists.length === 0 ? (
+              <p class="text-base-content/60">There are no decks yet.</p>
+            ) : (
+              <>
+                <ul class="list divide-y divide-base-300">
+                  {decklists.map((decklist) => {
+                    const distribution = getGuildDistribution(decklist);
+                    return (
+                      <li class="list-row">
+                        <a href={`/decklists/view/${decklist.uuid}/`} class="link link-hover font-semibold">
+                          {decklist.name}
+                        </a>
+                        <p class="text-sm text-base-content/60 mt-1">
+                          <span class={factionClass}>{identity.title}</span>
+                          {" "}· by {decklist.author} · {decklist.date_creation.split(" ")[0]}
+                        </p>
+                        {distribution.length > 0 && (
+                          <div class="mt-2 flex h-2 w-full max-w-xs overflow-hidden rounded-full bg-base-200">
+                            {distribution.map((seg) => (
+                              <span
+                                title={`${seg.label} · ${(seg.relative * 100).toFixed(1)}%`}
+                                style={`width:${(seg.relative * 100).toFixed(2)}%; background-color:#${seg.color}`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <a href="/decklists/" class="inline-block mt-2 text-sm link link-hover">
+                  Show more decks →
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    ))
+  }
+</Base>

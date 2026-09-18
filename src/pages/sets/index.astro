@@ -1,0 +1,26 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getPacks } from "../../lib/catalog";
+
+const packs = getPacks();
+---
+
+<Base title="Sets">
+  <h1 class="text-2xl font-bold mb-6">Sets</h1>
+  <ul class="list divide-y divide-base-300">
+    {
+      packs.map((pack) => (
+        <li class="list-row">
+          <div class="list-col-grow">
+            <a href={`/sets/${pack.code}/`} class="link link-hover font-semibold">
+              {pack.name}
+            </a>
+          </div>
+          <div class="text-sm text-base-content/60">
+            {pack.date_release} · {pack.size} cards
+          </div>
+        </li>
+      ))
+    }
+  </ul>
+</Base>

@@ -1,0 +1,65 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getPacks, getCardsByPack, getTypeByCode, getFactionByCode, getPackByCode } from "../../lib/catalog";
+
+export function getStaticPaths() {
+  return getPacks().map((pack) => ({ params: { code: pack.code } }));
+}
+
+const { code } = Astro.params;
+const pack = getPackByCode(code!)!;
+const cards = getCardsByPack(code!);
+---
+
+<Base title={pack.name}>
+  <h1 class="text-2xl font-bold mb-1">{pack.name}</h1>
+  <p class="text-sm text-neutral-500 mb-6">{pack.date_release} · {pack.size} cards</p>
+  <table class="table">
+    <thead>
+      <tr class="text-sm text-base-content/60">
+        <th>Code</th>
+        <th>Title</th>
+        <th>Type</th>
+        <th>Guild</th>
+        <th>Cost</th>
+        <th>Standing</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        cards.map((card) => {
+          const type = getTypeByCode(card.type_code);
+          const faction = getFactionByCode(card.faction_code);
+          const standingIcons = card.standing
+            ? Object.entries(card.standing).flatMap(([factionCode, count]) =>
+                Array.from({ length: count }, () => factionCode),
+              )
+            : [];
+          return (
+            <tr>
+              <td class="text-base-content/60">{card.code}</td>
+              <td>
+                <a href={`/cards/${card.code}/`} class="link link-hover font-medium">
+                  {card.title}
+                </a>
+              </td>
+              <td>{type?.name}</td>
+              <td>{faction?.name}</td>
+              <td>{card.cost === undefined ? "" : card.cost ?? "X"}</td>
+              <td>
+                {standingIcons.map((factionCode) => (
+                  <>
+                    <svg class={`icon-wb icon-${factionCode}`} aria-hidden="true">
+                      <use xlink:href={`#icon-${factionCode}`} />
+                    </svg>
+                    <span class="icon-fallback">{factionCode}</span>
+                  </>
+                ))}
+              </td>
+            </tr>
+          );
+        })
+      }
+    </tbody>
+  </table>
+</Base>
